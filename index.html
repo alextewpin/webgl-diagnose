@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>webgl-diagnose</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+      }
+
+      main {
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+        font-family: monospace;
+      }
+
+      div[data-type='header']:not(:first-child) {
+        margin-top: 20px;
+      }
+
+      footer {
+        margin-top: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div id="log"></div>
+      <footer>
+        <a
+          href="https://chromium.googlesource.com/chromium/src/gpu/+/master/config/software_rendering_list.json"
+          target="_blank"
+          >Problematic GPUs</a
+        >
+      </footer>
+    </main>
+  </body>
+  <script>
+    (() => {
+      const log = [];
+
+      const destroyGl = gl => {
+        if (gl) {
+          const loseContext = gl.getExtension('WEBGL_lose_context');
+          if (loseContext) {
+            loseContext.loseContext();
+          }
+          gl = null;
+        }
+      };
+
+      const testGl = (gl, type) => {
+        log.push(`===== ${type} WebGL =====`);
+        if (gl) {
+          const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+          if (debugInfo) {
+            log.push(
+              `Vendor: ${gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL)}`,
+            );
+            log.push(
+              `GPU: ${gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL)}`,
+            );
+          } else {
+            log.push('WebGL debug info: FAIL');
+          }
+          log.push('WebGL context: OK');
+          if (gl.getContextAttributes() && gl.getContextAttributes().stencil) {
+            log.push('WebGL stencil: OK');
+          } else {
+            log.push('WebGL stencil: FAIL');
+          }
+        } else {
+          log.push('WebGL context: FAIL');
+        }
+      };
+
+      const getGl = (canvas, options) =>
+        canvas.getContext('webgl', options) ||
+        canvas.getContext('experimental-webgl', options);
+
+      const diagnoseGl = () => {
+        const options = { stencil: true, failIfMajorPerformanceCaveat: true };
+        const softwareOptions = { stencil: true };
+
+        log.push('===== General =====');
+        log.push(window.navigator.userAgent);
+        if (!window.WebGLRenderingContext) {
+          log.push('window.WebGLRenderingContext: FAILED');
+        } else {
+          log.push('window.WebGLRenderingContext: OK');
+        }
+
+        const canvas = document.createElement('canvas');
+
+        const gl = getGl(canvas, options);
+        const softwareGl = getGl(canvas, softwareOptions);
+
+        testGl(gl, 'Accelerated');
+        testGl(softwareGl, 'Software');
+
+        destroyGl(gl);
+        destroyGl(softwareGl);
+      };
+
+      try {
+        diagnoseGl();
+      } catch (err) {
+        log.push('===== Error =====');
+        log.push(err);
+      }
+
+      document.getElementById('log').innerHTML = log
+        .map(
+          line =>
+            `<div data-type=${
+              String(line).slice(0, 5) === '=====' ? 'header' : 'paragraph'
+            }>
+              ${line}
+            </div>`,
+        )
+        .join('');
+    })();
+  </script>
+</html>
